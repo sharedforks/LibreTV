@@ -37,30 +37,30 @@ function extendAPISites(newSites) {
     Object.assign(API_SITES, newSites);
 }
 
-// 异步加载外部API源【最终修正版】
+// 异步加载外部API源【最终修正版 - 已解决URL编码问题】
 async function loadExternalApiSites() {
     try {
-        // 检查 window.ProxyAuth.addAuthToProxyUrl 函数是否存在
+        // 1. 检查鉴权函数是否存在，确保程序健壮性
         if (!window.ProxyAuth || typeof window.ProxyAuth.addAuthToProxyUrl !== 'function') {
             console.error('代理鉴权功能 (ProxyAuth.addAuthToProxyUrl) 未找到，无法加载外部源。');
-            // 在这种情况下，可以选择直接请求，但这可能会遇到CORS问题
-            // 为了避免这种情况，我们在这里直接抛出错误
             throw new Error('ProxyAuth function not available.');
         }
 
-        // 构造代理的完整目标 URL
-        const targetUrl = PROXY_URL + EXTERNAL_API_SITES_URL;
-        
-        // 使用项目中已有的鉴权函数来生成带有 auth 和 t 参数的最终 URL
-        const authenticatedProxyUrl = await window.ProxyAuth.addAuthToProxyUrl(targetUrl);
-        
-        console.log('正在请求带鉴权的代理URL:', authenticatedProxyUrl); // 调试日志
+        // 2.【关键修复】将完整的外部URL进行编码，使其可以安全地作为路径的一部分
+        const encodedExternalUrl = encodeURIComponent(EXTERNAL_API_SITES_URL);
 
-        // 使用添加了鉴权参数的 URL 发起请求
+        // 3. 构建基础的代理URL，现在路径部分是经过编码的，绝对安全
+        const proxyUrlWithEncodedTarget = PROXY_URL + encodedExternalUrl;
+        
+        // 4. 使用您项目中已有的函数，为这个安全的URL附加上 auth 和 t 鉴权参数
+        const authenticatedProxyUrl = await window.ProxyAuth.addAuthToProxyUrl(proxyUrlWithEncodedTarget);
+        
+        console.log('正在请求带鉴权和编码的代理URL:', authenticatedProxyUrl); // 调试日志
+
+        // 5. 发起最终的、格式完全正确的请求
         const response = await fetch(authenticatedProxyUrl);
         
         if (!response.ok) {
-            // 记录更详细的错误信息
             const errorText = await response.text();
             console.error('代理响应错误:', response.status, response.statusText, errorText);
             throw new Error(`网络响应错误: ${response.status}`);
