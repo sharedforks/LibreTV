@@ -37,27 +37,33 @@ function extendAPISites(newSites) {
     Object.assign(API_SITES, newSites);
 }
 
-// 异步加载外部API源【最终修正版 - 已解决URL编码问题】
+// 异步加载外部API源【最终修正版 - 支持Base58解码】
 async function loadExternalApiSites() {
     try {
-        // 1. 检查鉴权函数是否存在，确保程序健壮性
+        // 1. 检查鉴权函数是否存在
         if (!window.ProxyAuth || typeof window.ProxyAuth.addAuthToProxyUrl !== 'function') {
             console.error('代理鉴权功能 (ProxyAuth.addAuthToProxyUrl) 未找到，无法加载外部源。');
             throw new Error('ProxyAuth function not available.');
         }
 
-        // 2.【关键修复】将完整的外部URL进行编码，使其可以安全地作为路径的一部分
+        // 2. 检查Base58解码库是否存在
+        if (typeof Base58 === 'undefined') {
+            console.error('Base58解码库未找到。请确保已通过script标签正确引入。');
+            throw new Error('Base58 library not found.');
+        }
+
+        // 3. 将完整的外部URL进行编码
         const encodedExternalUrl = encodeURIComponent(EXTERNAL_API_SITES_URL);
 
-        // 3. 构建基础的代理URL，现在路径部分是经过编码的，绝对安全
+        // 4. 构建代理URL
         const proxyUrlWithEncodedTarget = PROXY_URL + encodedExternalUrl;
         
-        // 4. 使用您项目中已有的函数，为这个安全的URL附加上 auth 和 t 鉴权参数
+        // 5. 为URL附加上 auth 和 t 鉴权参数
         const authenticatedProxyUrl = await window.ProxyAuth.addAuthToProxyUrl(proxyUrlWithEncodedTarget);
         
-        console.log('正在请求带鉴权和编码的代理URL:', authenticatedProxyUrl); // 调试日志
+        console.log('正在请求带鉴权和编码的代理URL:', authenticatedProxyUrl);
 
-        // 5. 发起最终的、格式完全正确的请求
+        // 6. 发起请求
         const response = await fetch(authenticatedProxyUrl);
         
         if (!response.ok) {
@@ -66,9 +72,16 @@ async function loadExternalApiSites() {
             throw new Error(`网络响应错误: ${response.status}`);
         }
         
-        const externalSites = await response.json();
+        // 7. 【核心修改】获取Base58编码的文本，然后解码
+        const base58EncodedText = await response.text();
+        const decodedBytes = Base58.decode(base58EncodedText);
+        const decodedJsonString = new TextDecoder().decode(decodedBytes);
+        
+        // 8. 解析解码后的JSON字符串
+        const externalSites = JSON.parse(decodedJsonString);
+        
         extendAPISites(externalSites);
-        console.log('外部API源加载成功:', externalSites);
+        console.log('外部API源加载并解码成功:', externalSites);
 
     } catch (error) {
         console.error('加载外部API源失败:', error);
