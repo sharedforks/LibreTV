@@ -3,6 +3,8 @@ const PROXY_URL = '/proxy/';    // 适用于 Cloudflare, Netlify (带重写), Ve
 // const HOPLAYER_URL = 'https://hoplayer.com/index.html';
 const SEARCH_HISTORY_KEY = 'videoSearchHistory';
 const MAX_HISTORY_ITEMS = 5;
+// 请确保这里的 URL 是正确的
+const EXTERNAL_API_SITES_URL = 'https://gist.githubusercontent.com/gujiangjiang/99cef3adaea3f2f73524f7f00f67d62a/raw/80c546411a14e0259416cff2bc47985938b96b45/libretv.json';
 
 // 密码保护配置
 // 注意：PASSWORD 环境变量是必需的，所有部署都必须设置密码以确保安全
@@ -35,10 +37,48 @@ function extendAPISites(newSites) {
     Object.assign(API_SITES, newSites);
 }
 
+// 异步加载外部API源【最终修正版】
+async function loadExternalApiSites() {
+    try {
+        // 检查 window.ProxyAuth.addAuthToProxyUrl 函数是否存在
+        if (!window.ProxyAuth || typeof window.ProxyAuth.addAuthToProxyUrl !== 'function') {
+            console.error('代理鉴权功能 (ProxyAuth.addAuthToProxyUrl) 未找到，无法加载外部源。');
+            // 在这种情况下，可以选择直接请求，但这可能会遇到CORS问题
+            // 为了避免这种情况，我们在这里直接抛出错误
+            throw new Error('ProxyAuth function not available.');
+        }
+
+        // 构造代理的完整目标 URL
+        const targetUrl = PROXY_URL + EXTERNAL_API_SITES_URL;
+        
+        // 使用项目中已有的鉴权函数来生成带有 auth 和 t 参数的最终 URL
+        const authenticatedProxyUrl = await window.ProxyAuth.addAuthToProxyUrl(targetUrl);
+        
+        console.log('正在请求带鉴权的代理URL:', authenticatedProxyUrl); // 调试日志
+
+        // 使用添加了鉴权参数的 URL 发起请求
+        const response = await fetch(authenticatedProxyUrl);
+        
+        if (!response.ok) {
+            // 记录更详细的错误信息
+            const errorText = await response.text();
+            console.error('代理响应错误:', response.status, response.statusText, errorText);
+            throw new Error(`网络响应错误: ${response.status}`);
+        }
+        
+        const externalSites = await response.json();
+        extendAPISites(externalSites);
+        console.log('外部API源加载成功:', externalSites);
+
+    } catch (error) {
+        console.error('加载外部API源失败:', error);
+    }
+}
+
 // 暴露到全局
 window.API_SITES = API_SITES;
 window.extendAPISites = extendAPISites;
-
+window.loadExternalApiSites = loadExternalApiSites;
 
 // 添加聚合搜索的配置选项
 const AGGREGATED_SEARCH_CONFIG = {
