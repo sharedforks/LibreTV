@@ -4,7 +4,7 @@ const PROXY_URL = '/proxy/';    // 适用于 Cloudflare, Netlify (带重写), Ve
 const SEARCH_HISTORY_KEY = 'videoSearchHistory';
 const MAX_HISTORY_ITEMS = 5;
 // 请确保这里的 URL 是正确的
-const EXTERNAL_API_SITES_URL = 'https://gist.githubusercontent.com/gujiangjiang/99cef3adaea3f2f73524f7f00f67d62a/raw/80c546411a14e0259416cff2bc47985938b96b45/libretv.json';
+const EXTERNAL_API_SITES_URL = 'https://gist.githubusercontent.com/senshinya/5a5cb900dfa888fd61d767530f00fc48/raw/gistfile1.txt';
 
 // 密码保护配置
 // 注意：PASSWORD 环境变量是必需的，所有部署都必须设置密码以确保安全
@@ -37,7 +37,7 @@ function extendAPISites(newSites) {
     Object.assign(API_SITES, newSites);
 }
 
-// 异步加载外部API源【最终修正版 - 支持Base58解码】
+// 异步加载外部API源【最终修正版 - 兼容新格式 & 支持Base58解码】
 async function loadExternalApiSites() {
     try {
         // 1. 检查鉴权函数是否存在
@@ -72,16 +72,24 @@ async function loadExternalApiSites() {
             throw new Error(`网络响应错误: ${response.status}`);
         }
         
-        // 7. 【核心修改】获取Base58编码的文本，然后解码
+        // 7. 获取Base58编码的文本，然后解码
         const base58EncodedText = await response.text();
         const decodedBytes = Base58.decode(base58EncodedText);
         const decodedJsonString = new TextDecoder().decode(decodedBytes);
         
         // 8. 解析解码后的JSON字符串
-        const externalSites = JSON.parse(decodedJsonString);
+        const externalConfig = JSON.parse(decodedJsonString);
         
-        extendAPISites(externalSites);
-        console.log('外部API源加载并解码成功:', externalSites);
+        // 9. 【核心修改】从返回的对象中提取 api_site 属性
+        if (externalConfig && externalConfig.api_site) {
+            const externalSites = externalConfig.api_site;
+            extendAPISites(externalSites);
+            console.log('外部API源加载、解码并兼容成功:', externalSites);
+        } else {
+            // 如果没有api_site键，也尝试直接加载，以兼容旧格式
+            extendAPISites(externalConfig);
+            console.warn('外部API源格式为旧版，直接加载:', externalConfig);
+        }
 
     } catch (error) {
         console.error('加载外部API源失败:', error);
